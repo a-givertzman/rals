@@ -2,13 +2,13 @@
 
 Компактная версия на гитхабе: https://github.com/a-givertzman/rals/issues/2
 
-1.  ## Общие сведения
+## 1. Общие сведения
 
 Программное обеспечение рассчитано на масштаб предприятия и может объединять оборудование одного или нескольких цехов.
 
 Все площадки и оборудование выстраиваются в древовидную структуру.
 
-1.  ## Основные модули
+## 2. Основные модули
 
 *   Система мониторинга текущего состояния оборудования
     *   Отслеживание параметров режима работы в реальном времени
@@ -24,7 +24,7 @@
     *   Планирование ТО и трудозатрат (базовые функции, не заменяет ERP)
     *   Подготовка спецификаций для закупок (Простые списки)
 
-1.  ## Архитектура
+## 3. Архитектура
 
 *   **Данные**
     *   Обмен с бэклм - на именованных событиях
@@ -69,90 +69,15 @@
         *   Узел дерева всегда имеет только одного родителя
         *   Из E-Plan в формате csv, делается разработчиком системы, не является функцией для конечного пользователя
         *   Примерный вид таблицы
-
-            <table border="1" cellpadding="1" cellspacing="1" style="width:500px">
-
-            <thead>
-
-            <tr>
-
-            <th scope="col">id</th>
-
-            <th scope="col">parent_id</th>
-
-            <th scope="col">name</th>
-
-            <th scope="col">title</th>
-
-            <th scope="col">param1</th>
-
-            <th scope="col">param2</th>
-
-            <th scope="col">...</th>
-
-            </tr>
-
-            </thead>
-
-            <tbody>
-
-            <tr>
-
-            <td>1</td>
-
-            <td>null</td>
-
-            <td>
-
-            АБВГ.XXXXXX.001
-
-            </td>
-
-            <td>Кран мостовой</td>
-
-            <td>height: 30m</td>
-
-            <td>width: 40m</td>
-
-            <td> </td>
-
-            </tr>
-
-            <tr>
-
-            <td>2</td>
-
-            <td>1</td>
-
-            <td>
-
-            АБВГ.XXXXXX.002
-
-            </td>
-
-            <td>Лебедка главная</td>
-
-            <td>length: 100m </td>
-
-            </tr>
-
-            </tbody>
-
-            </table>
-
----
-
-      | id | parent_id | name | title | param1 | param2 | ... |
-      |----|-----------|------|-------|--------|--------|-----|
-      | 1 | null | АБВГ.XXXXXX.001 | Кран мостовой | height: 30m | width: 40m |  |
-      | 2 | 1 | АБВГ.XXXXXX.002 | Лебедка главная | length: 100m |  |  |
-
-
-        *   id - уникальный признак в E-Plan
-        *   parent_id - id родительского элемента
-        *   name - Пректное наименование
-        *   title - Человеческое название
-        *   param's - необходимый набор технических параметров оборудования, определяется расчетами износа и инженером по ТО
+            | id | parent_id | name | title | param1 | param2 | ... |
+            |----|-----------|------|-------|--------|--------|-----|
+            | 1 | null | АБВГ.XXXXXX.001 | Кран мостовой | height: 30m | width: 40m |  |
+            | 2 | 1 | АБВГ.XXXXXX.002 | Лебедка главная | length: 100m |  |  |
+            *   id - уникальный признак в E-Plan
+            *   parent_id - id родительского элемента
+            *   name - Пректное наименование
+            *   title - Человеческое название
+            *   param's - необходимый набор технических параметров оборудования, определяется расчетами износа и инженером по ТО
     *   Отобразить в виде дерева
     *   Характеристики оборудования
     *   Документы
@@ -226,157 +151,14 @@
 *   **Статус Работы**
     *   Принадлежит одной записи Работа
     *   Статус
-
-        <table border="1" cellpadding="1" cellspacing="1" style="width:500px">
-
-        <thead>
-
-        <tr>
-
-        <th colspan="1" rowspan="2" scope="col" style="text-align: center;">Статус</th>
-
-        <th scope="col">Переход в:</th>
-
-        <th scope="col" style="width: 57px;"> </th>
-
-        <th scope="col" style="width: 70px;"> </th>
-
-        <th scope="col"> </th>
-
-        <th scope="col"> </th>
-
-        <th scope="col"> </th>
-
-        </tr>
-
-        <tr>
-
-        <th scope="col">Planned</th>
-
-        <th scope="col" style="width: 57px;">InProgress</th>
-
-        <th scope="col" style="width: 70px;text-align: center;">Paused</th>
-
-        <th scope="col">Confirmation</th>
-
-        <th scope="col">Completed</th>
-
-        <th scope="col">Cancelled</th>
-
-        </tr>
-
-        <tr>
-
-        <td>Planned</td>
-
-        <td style="text-align:center">-</td>
-
-        <td style="text-align:center; width:57px">Yes</td>
-
-        <td style="text-align:center; width:70px"> </td>
-
-        <td style="text-align:center"> </td>
-
-        <td style="text-align:center"> </td>
-
-        <td style="text-align:center">Yes</td>
-
-        </tr>
-
-        <tr>
-
-        <td>InProgress</td>
-
-        <td style="text-align:center"> </td>
-
-        <td style="text-align:center; width:57px">-</td>
-
-        <td style="text-align:center; width:70px">Yes</td>
-
-        <td style="text-align:center">Yes</td>
-
-        <td style="text-align:center"> </td>
-
-        <td style="text-align:center">Yes</td>
-
-        </tr>
-
-        <tr>
-
-        <td>Paused</td>
-
-        <td style="text-align:center"> </td>
-
-        <td style="text-align:center; width:57px">Yes</td>
-
-        <td style="text-align:center; width:70px">-</td>
-
-        <td style="text-align:center">Yes</td>
-
-        <td style="text-align:center"> </td>
-
-        <td style="text-align:center">Yes</td>
-
-        </tr>
-
-        <tr>
-
-        <td>Confirmation</td>
-
-        <td style="text-align:center"> </td>
-
-        <td style="text-align:center; width:57px">Yes</td>
-
-        <td style="text-align:center; width:70px"> </td>
-
-        <td style="text-align:center">-</td>
-
-        <td style="text-align:center">Yes</td>
-
-        <td style="text-align:center">Yes</td>
-
-        </tr>
-
-        <tr>
-
-        <td>Completed</td>
-
-        <td style="text-align:center"> </td>
-
-        <td style="text-align:center; width:57px"> </td>
-
-        <td style="text-align:center; width:70px"> </td>
-
-        <td style="text-align:center"> </td>
-
-        <td style="text-align:center">-</td>
-
-        <td style="text-align:center"> </td>
-
-        </tr>
-
-        <tr>
-
-        <td>Cancelled</td>
-
-        <td style="text-align:center"> </td>
-
-        <td style="text-align:center; width:57px"> </td>
-
-        <td style="text-align:center; width:70px"> </td>
-
-        <td style="text-align:center"> </td>
-
-        <td style="text-align:center"> </td>
-
-        <td style="text-align:center">-</td>
-
-        </tr>
-
-        </thead>
-
-        </table>
-
+        | Статус | Planned | InProgress | Paused | Confirmation | Completed | Cancelled |
+        | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+        | Planned | - | Yes | | | | Yes |
+        | InProgress | | - | Yes | Yes | | Yes |
+        | Paused | | Yes | - | Yes | | Yes |
+        | Confirmation | | Yes | | - | Yes | Yes |
+        | Completed | | | | | - | |
+        | Cancelled | | | | | | - |
         *   Правила агрегации (дочерний -> родитель, <span style="color:#000000">приоритет сверху вниз</span>)
             *   <span style="color:#000000">Если есть Paused → Parent: Paused</span>
             *   <span style="color:#000000">Если есть Confirmation → Parent: Confirmation</span>
@@ -410,7 +192,7 @@
     *   Описание
     *   Фотографии
 
-1.  ## Бэкенд
+## 4. Бэкенд
 
 *   Работает как сервис
 *   Опрашивает подключенные устройства
@@ -461,7 +243,7 @@
     *   Выполняет команды
     *   Отвечает на запросы
 
-1.  ## Фронтенда
+## 5. Фронтенда
 
 *   **Данные**
     *   Обмен с бэкендом на именованных событиях (Inf, Rec, ReqCon, ReqErr, Cmd, CmdCon, CmdErr)
@@ -568,7 +350,7 @@
     *   Выбранную работу править в форме **Редактор Работ**
     *   Глубину вложенности ограничить настройкой из конфиг файла (предлагаю 3..5)
 
-1.  ## В будущих версиях
+## 6. В будущих версиях
 
 *   **Фронтенд**
     *   **Page | Список На подтверждение** (Для Инженеров)
