@@ -1,0 +1,247 @@
+/*
+    PROCESS TAG
+*/
+do $$
+begin
+    if not exists (SELECT 1 FROM pg_type WHERE typname = 'tag_type_enum') THEN
+        CREATE TYPE public."tag_type_enum" AS ENUM (
+            'Bool',
+            'Int',
+            'UInt',
+            'DInt',
+            'Word',
+            'LInt',
+            'Real',
+            'Double',
+            'String',
+            'Json',
+            'Time',
+            'Date_And_Time'
+        );
+    end if;
+end
+$$;
+create table if not exists public.tags (
+    id 		serial not null,
+    type      tag_type_enum not null,
+    name      varchar(255) not null unique,
+    description   varchar(255) not null DEFAULT '',
+    PRIMARY KEY (id)
+);
+comment on table public.tags is 'Tag dictionary';
+
+/*
+    PROCESS EVENT
+*/
+
+-- Журнал событий сигнализации
+--  - Storing boolean values. 0 - Normal, > 0 - Alarm'
+-- 
+-- Настоить autovacuum для очистки места на диске
+--  autovacuum_vacuum_scale_factor = 0.01
+--  autovacuum_analyze_scale_factor = 0.02
+--  autovacuum_vacuum_threshold = 1000
+--  autovacuum_analyze_threshold = 1000
+CREATE TABLE IF NOT EXISTS event (
+    uid         BIGSERIAL PRIMARY KEY,  -- Уникальный идентификатор события
+    timestamp   TIMESTAMPTZ NOT NULL,   -- Время регистрации события
+    pid         int4 NOT NULL REFERENCES public.tags(id),          -- Идентификатор источника (процесс / параметр / сигнал)
+    value       int2 NOT NULL,          -- Значение сигнала (0 = Норма, >0 = Авария)
+    status      int2 NOT NULL           -- Статус сигнала процесса (0 - Норма, 10 - Недостоверно) (иными словами качество сигнала)
+); 
+-- Индексы для хронологической выборки
+CREATE INDEX idx_event_timestamp_uid ON event (timestamp ASC, uid ASC);
+
+-- Настройки размера журнала сигнализации
+--  - По максимальному количеству строк
+--  - По максимальному времени хранения
+CREATE TABLE IF NOT EXISTS event_utils (
+    id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    row_count BIGINT NOT NULL DEFAULT 0,                -- Текущее количество строк в event
+    row_limit BIGINT NOT NULL DEFAULT 6000000,          -- Максимально допустимое количество строк, используется как защита от переполнения диска
+    time_limit INTERVAL DEFAULT '3 years',              -- Максимальный срок хранения событи, лет (если NULL, то чистим только по row_limit)
+    purge_shift_size INT NOT NULL DEFAULT 1000,         -- Смещение для гистерезиса удаления
+    purge_batch_size INT NOT NULL DEFAULT 1000,         -- Размер пачки удаления
+    is_purge_running BOOLEAN NOT NULL DEFAULT false     -- Флаг блокировки одновременного purge
+);
+INSERT INTO
+    event_utils (
+        row_count,
+        row_limit,
+        purge_shift_size,
+        is_purge_running
+    )
+VALUES
+    (0, 6000000, 1000, false)
+ON CONFLICT (id) DO NOTHING;
+
+-- Механизм автоматической очистки событий сигнализации
+--  - Удаляет самые старые записи, если превышен лимит.
+--  - Удаляет превышенное количество записей плюс purge_shift_size - для небольшого гистерезиса
+--  - Не будет запускаться при каждой вставке особенно небольшого количества событий
+--  - Использует флаг is_purge_running для предотвращения повторного вызова
+CREATE OR REPLACE FUNCTION event_purge_records()
+RETURNS void 
+LANGUAGE plpgsql AS $$
+DECLARE
+    to_delete BIGINT;
+    v_batch_size INT;
+    v_time_limit INTERVAL;
+    v_deleted BIGINT;
+    is_purge_possible BOOLEAN;
+BEGIN
+    WITH upd_result AS (
+        UPDATE event_utils SET is_purge_running = true WHERE id = 1 AND is_purge_running = false
+        RETURNING *
+    ) SELECT count(*) = 1 FROM upd_result INTO is_purge_possible;
+    IF is_purge_possible THEN
+        SELECT GREATEST((row_count - row_limit + purge_shift_size), 0),
+            purge_batch_size,
+            time_limit
+        INTO
+            to_delete,
+            v_batch_size,
+            v_time_limit
+        FROM event_utils WHERE id = 1;
+        -- 1. проверка лимита строк
+        IF to_delete > 0 THEN
+            LOOP
+                DELETE FROM event e
+                USING (
+                    SELECT uid
+                    FROM event
+                    ORDER BY timestamp, uid
+                    LIMIT v_batch_size
+                    FOR UPDATE SKIP LOCKED
+                ) d
+                WHERE e.uid = d.uid;
+                GET DIAGNOSTICS v_deleted = ROW_COUNT;
+                to_delete := to_delete - v_deleted;
+                EXIT WHEN v_deleted = 0 OR to_delete <= 0;
+            END LOOP;
+        ELSE
+            -- 2. проверка срока хранения
+            IF v_time_limit IS NOT NULL THEN
+                LOOP
+                    DELETE FROM event e
+                    USING (
+                        SELECT uid
+                        FROM event
+                        WHERE timestamp < now() - v_time_limit
+                        ORDER BY timestamp, uid
+                        LIMIT v_batch_size
+                        FOR UPDATE SKIP LOCKED
+                    ) d
+                    WHERE e.uid = d.uid;
+                    GET DIAGNOSTICS v_deleted = ROW_COUNT;
+                    EXIT WHEN v_deleted = 0;
+                END LOOP;
+            END IF;
+        END IF;
+        UPDATE event_utils SET is_purge_running = false WHERE id = 1;
+    END IF;
+    EXCEPTION WHEN OTHERS THEN
+        UPDATE event_utils SET is_purge_running = false WHERE id = 1;
+        RAISE;
+END;
+$$;
+
+-- Механизм запуска автоматической очистки
+--  - Если превышение есть — запускает event_purge_records().
+--  - Проверка необходимости purge:
+--      - По предельному количеству записей: если row_count > больше row_limit
+--      - По максимальному сроку хранения записей
+CREATE OR REPLACE FUNCTION event_check_for_purge()
+RETURNS void 
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    is_purge_needed BOOLEAN;
+    v_time_limit INTERVAL;
+BEGIN
+    SELECT (row_count > row_limit) IS TRUE FROM event_utils WHERE id = 1 INTO is_purge_needed;
+    IF is_purge_needed THEN
+        PERFORM event_purge_records();
+    ELSE
+        SELECT time_limit INTO v_time_limit FROM public.event_utils WHERE id = 1;
+        IF v_time_limit IS NOT NULL THEN
+            SELECT EXISTS (
+                SELECT 1
+                FROM public.event
+                WHERE timestamp < NOW() - v_time_limit
+                LIMIT 1
+            )
+            INTO is_purge_needed;
+            IF is_purge_needed THEN
+                PERFORM event_purge_records();
+            END IF;
+        END IF;
+    END IF;
+END;
+$$;
+
+-- Функция вызывается триггером event_insert_trigger для подсчета фактического количества записей в event
+--  - Считает row_count без вызова COUNT(*) по таблице
+CREATE OR REPLACE FUNCTION event_counter_inc()
+RETURNS trigger 
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    add_count INT;
+BEGIN
+    SELECT count(*) FROM new_tbl INTO add_count;
+    UPDATE event_utils SET row_count = row_count + add_count WHERE id = 1;
+    PERFORM event_check_for_purge();
+    RETURN new;
+END;
+$$;
+
+-- Триггер срабатывает один раз на INSERT в event
+CREATE TRIGGER event_insert_trigger
+    AFTER INSERT ON event
+    REFERENCING NEW TABLE AS new_tbl
+    FOR EACH STATEMENT
+    EXECUTE PROCEDURE  event_counter_inc();
+-- 
+-- Обнуление row_count при truncate по триггеру
+CREATE FUNCTION event_counter_dec()
+RETURNS trigger 
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    del_count INT;
+BEGIN
+    SELECT count(*) FROM old_tbl INTO del_count;
+    UPDATE event_utils
+        SET row_count = GREATEST(row_count - del_count, 0)
+        WHERE id = 1;
+    RETURN NULL;
+END;
+$$;
+
+-- Для обнуления row_count при delete
+CREATE TRIGGER event_delete_trigger
+    AFTER DELETE ON event
+    REFERENCING OLD TABLE AS old_tbl 
+    FOR EACH STATEMENT
+    EXECUTE PROCEDURE  event_counter_dec();
+
+-- Обнуление row_count при truncate по триггеру
+CREATE OR REPLACE FUNCTION event_counter_truncate()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE event_utils
+        SET row_count = 0
+    WHERE id = 1;
+
+    RETURN NULL;
+END;
+$$;
+
+-- Для обнуления row_count при truncate
+CREATE TRIGGER event_truncate_trigger
+    AFTER TRUNCATE ON event
+    FOR EACH STATEMENT
+    EXECUTE PROCEDURE event_counter_truncate();
