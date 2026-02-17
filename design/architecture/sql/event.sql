@@ -247,6 +247,12 @@ CREATE TRIGGER event_truncate_trigger
 --  autovacuum_vacuum_threshold = 1000
 --  autovacuum_analyze_threshold = 1000
 --  При этих настройках vacuum запустится примерно при 61k "мертвых" строк
+-- После развертывания имеет смысл периодически смотреть это:
+--  SELECT relname, n_dead_tup, n_live_tup
+--      FROM pg_stat_user_tables
+--      WHERE relname = 'event';
+-- Покажет, сколько «мертвых» строк в таблице.
+-- Если много dead tuples — возможно параметры стоит отрегулировать
 ALTER TABLE public.event SET (
     autovacuum_vacuum_scale_factor = 0.01,
     autovacuum_analyze_scale_factor = 0.02,
