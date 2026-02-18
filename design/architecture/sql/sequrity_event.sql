@@ -3,9 +3,11 @@
 -- - Связь должна быть 1 : 1 (одному событию всегда соответствует один пользователь)
 
 CREATE TABLE security_event (
-    user_id: INT,
-    event_id: BIGINT,
-    PRIMARY KEY (event_id, user_id)
+    event_id: BIGINT NOT NULL
+        REFERENCES event(uid) ON DELETE CASCADE,
+    user_id: INT NOT NULL
+        REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (event_id)
 );
 
 CREATE INDEX idx_security_event_event
