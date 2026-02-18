@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS event (
 CREATE INDEX idx_event_timestamp_uid ON event (timestamp ASC, uid ASC);
 
 -- Принадлежность события к системе безопасности
-CREATE TABLE event_user (
+CREATE TABLE sequrity_event (
     event_id   VARCHAR(128) NOT NULL REFERENCES access_feature(id) ON DELETE CASCADE,
     user_id     INT NOT NULL REFERENCES access_group(id) ON DELETE CASCADE,
     UNIQUE (event_id)
