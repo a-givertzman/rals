@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS equipment (
     name            VARCHAR(255) NOT NULL,                      -- Проектное / Системное имя устройста, уникальное как минимум в пределах родителя
     title           VARCHAR(512) NOT NULL,                      -- Название для UI, не требует перевода, поскольку задано пользователем
     status          equipment_status NOT NULL DEFAULT 'Active', -- Статус: `Active` / `Archived`
-    attributes      JSONB NOT NULL DEFAULT '{}'::jsonb,         -- Характеристики оборудования
+    attributes      JSONB NOT NULL DEFAULT '{}'::jsonb,         -- Характеристики оборудования + параметры для расчёта износа
+    -- wear_attributes JSONB NOT NULL DEFAULT '{}'::jsonb,         -- Конфигурация расчётной модели
     created         TIMESTAMPTZ NOT NULL DEFAULT Now(),         -- Дата создания записи (сомнительно, можем записать в логи факт создания, если это вообще надо)
     -- Уникальность имени в пределах родителя
     CONSTRAINT equipment_name_unique_per_parent
