@@ -121,3 +121,44 @@ CREATE INDEX idx_eos_operating_snapshot_created
 -- Для операций очистки и retention
 CREATE INDEX idx_eos_created
     ON equipment_operating_snapshot (created);
+
+-- Проверка соответствия категории индикатора
+CREATE OR REPLACE FUNCTION check_indicator_category_match()
+RETURNS TRIGGER AS $$
+DECLARE
+    expected_category indicator_category;
+BEGIN
+    -- Определяем ожидаемую категорию по таблице
+    IF TG_TABLE_NAME = 'condition_indicator_value' THEN
+        expected_category := 'condition';
+    ELSIF TG_TABLE_NAME = 'equipment_operating_snapshot' THEN
+        expected_category := 'operating';
+    ELSE
+        RAISE EXCEPTION 'check_indicator_category_match | called from unsupported table %', TG_TABLE_NAME;
+    END IF;
+    -- Проверяем соответствие категории индикатора
+    IF NOT EXISTS (
+        SELECT 1
+        FROM equipment_indicator ei
+        WHERE ei.id = NEW.indicator_id
+          AND ei.category = expected_category
+    ) THEN
+        RAISE EXCEPTION
+            "check_indicator_category_match | Indicator % doesn't match to category % for table %",
+            NEW.indicator_id,
+            expected_category,
+            TG_TABLE_NAME;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Триггеры для проверки соответствия категории индикатора
+CREATE TRIGGER trg_check_condition_indicator_category
+    BEFORE INSERT ON condition_indicator_value
+    FOR EACH ROW
+    EXECUTE FUNCTION check_indicator_category_match();
+CREATE TRIGGER trg_check_operating_indicator_category
+    BEFORE INSERT ON equipment_operating_snapshot
+    FOR EACH ROW
+    EXECUTE FUNCTION check_indicator_category_match();
