@@ -144,7 +144,7 @@ BEGIN
           AND ei.category = expected_category
     ) THEN
         RAISE EXCEPTION
-            "check_indicator_category_match | Indicator % doesn't match to category % for table %",
+            'check_indicator_category_match | Indicator % does not match to category % for table %',
             NEW.indicator_id,
             expected_category,
             TG_TABLE_NAME;
@@ -155,10 +155,10 @@ $$ LANGUAGE plpgsql;
 
 -- Триггеры для проверки соответствия категории индикатора
 CREATE TRIGGER trg_check_condition_indicator_category
-    BEFORE INSERT ON condition_indicator_value
+    BEFORE INSERT OR UPDATE OF condition_indicator_value
     FOR EACH ROW
     EXECUTE FUNCTION check_indicator_category_match();
 CREATE TRIGGER trg_check_operating_indicator_category
-    BEFORE INSERT ON equipment_operating_snapshot
+    BEFORE INSERT OR UPDATE OF equipment_operating_snapshot
     FOR EACH ROW
     EXECUTE FUNCTION check_indicator_category_match();
